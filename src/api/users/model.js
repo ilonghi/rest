@@ -24,11 +24,7 @@ class UserSchema {
 
 class Users {
 
-  constructor() {
-    console.log("sto costruendo Users")
-  }
-
-  find(username) {
+  static find(username) {
     return new Promise((resolve, reject) => {
       if(username === 'ILONGHIX') {
         reject(new SirtiError('ILONGHIX error', 'nun se vede', 400))
@@ -67,7 +63,7 @@ class Users {
     })
   }
 
-  findByUsername(username) {
+  static findByUsername(username) {
     return new Promise((resolve, reject) => {
       this.find(username)
         .then((users) => {
@@ -132,4 +128,4 @@ const model = mongoose.model('Users', usersSchema)
 */
 
 // export const schema = model.schema
-export default new Users
+export default Users
