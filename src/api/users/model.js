@@ -1,6 +1,7 @@
 import oracledb from 'oracledb'
 import Promise from 'bluebird'
 import { SirtiError } from '../../services/sirti-error'
+import { RemoteActivitySource } from '../../services/sirti-remote-activity'
 
 class UserSchema {
 
@@ -73,6 +74,41 @@ class Users {
           resolve(users[0])
         })
         .catch((err) => reject(err))
+    })
+  }
+
+  static create(body) {
+    return new Promise((resolve, reject) => {
+      oracledb.getPool().getConnection()
+        .then((connection) => {
+          let raSource = new RemoteActivitySource(connection, {
+            description: "test",
+            sourceService: "ENFTTH_CORE",
+            sourceContext: "SINFO_PROJECTS",
+            targetService: "ENFTTH_AP",
+            targetContext: "SINFO_PROJECTS"
+          })
+          raSource.init()
+            .then((res) => {
+              connection.commit()
+                .then(() => {
+                  console.log("Ho committato")
+                  doRelease(connection)
+                  resolve(res)
+                })
+                .catch((err) => {
+                  doRelease(connection)
+                  reject(err)
+                })
+            })
+            .catch((err) => {
+              doRelease(connection)
+              reject(err)
+            })
+        })
+        .catch((err) => {
+          reject(err)
+        })
     })
   }
 

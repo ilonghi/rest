@@ -2,9 +2,11 @@ import _ from 'lodash'
 import { success, notFound } from '../../services/response/'
 import { Users } from '.'
 
-export const create = ({ bodymen: { body } }, res, next) =>
-  Users.create(body)
-    .then((users) => users.view(true))
+//export const create = ({ bodymen: { body } }, res, next) =>
+export const create = (req, res, next) =>
+  // Users.create(body)
+  Users.create()
+    // .then((users) => users.view(true))
     .then(success(res, 201))
     .catch(next)
 
