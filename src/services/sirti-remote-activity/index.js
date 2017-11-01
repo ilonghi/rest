@@ -1,6 +1,8 @@
 import oracledb from 'oracledb'
 import Promise from 'bluebird'
 
+import { EXCEPTIONS } from './constants'
+
 export class RemoteActivitySource {
 
   constructor(connection, session) {
@@ -17,6 +19,7 @@ export class RemoteActivitySource {
     this.targetToken = {}
     this.targetToken[this.targetService] = {}
     this.targetToken[this.targetService][this.targetContext] = undefined
+    this.dbLink = ''
 
     this.sessionReady = false // Indica che l'insert nella RA_SESSION non è ancora avvenuto
   }
@@ -35,7 +38,7 @@ export class RemoteActivitySource {
             ,:USER_ID
             ,:USER_NAME
           );
-          -- EXCEPTIONS
+          ${EXCEPTIONS}
         end;
       `
       this.connection.execute(sql, {
@@ -47,7 +50,10 @@ export class RemoteActivitySource {
         SOURCE_SERVICE: { val: this.sourceService, dir: oracledb.BIND_IN, type:oracledb.STRING },
         SOURCE_CONTEXT: { val: this.sourceContext, dir: oracledb.BIND_IN, type:oracledb.STRING },
         USER_ID: { val: null, dir: oracledb.BIND_IN, type:oracledb.NUMBER },
-        USER_NAME: { val: null, dir: oracledb.BIND_IN, type:oracledb.STRING }
+        USER_NAME: { val: null, dir: oracledb.BIND_IN, type:oracledb.STRING },
+        ERRMSG: { dir: oracledb.BIND_OUT, type: oracledb.STRING },
+        ERRCODE: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
       })
         .then((res) => {
           this.sessionToken = res.outBinds.SESSION_TOKEN
