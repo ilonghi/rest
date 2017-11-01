@@ -2,6 +2,7 @@ import oracledb from 'oracledb'
 import Promise from 'bluebird'
 
 import { EXCEPTIONS } from './constants'
+import { SirtiError } from '../sirti-error'
 
 export class RemoteActivitySource {
 
@@ -22,6 +23,97 @@ export class RemoteActivitySource {
     this.dbLink = ''
 
     this.sessionReady = false // Indica che l'insert nella RA_SESSION non è ancora avvenuto
+  }
+
+  _check_session_exists() {
+    return new Promise((resolve, reject) => {
+      let sql = `
+        begin
+          :CHECK_SESSION_ID := rm_activity.check_session_exists (
+             :SESSION_TOKEN
+            ,:SESSION_ID
+          );
+          ${EXCEPTIONS}
+        end;
+      `
+      this.connection.execute(sql, {
+        CHECK_SESSION_ID: { val: this.sessionToken, dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+        SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, type: oracledb.STRING },
+        SESSION_ID: { val: this.sessionId, dir: oracledb.BIND_IN, type:oracledb.NUMBER },
+        ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+        ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
+        DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
+      })
+        .then((res) => {
+          if(res.outBinds.CHECK_SESSION_ID === "0") {
+            return resolve(false)
+          }
+          return resolve(true)
+        })
+        .catch((err) => {
+          reject(err)
+        })
+    })
+  }
+
+  is_session_ready() {
+    return new Promise((resolve, reject) => {
+      // se la sessione non è ancora stata inizializzata restituisco false
+      if(!this.sessionReady) {
+        return resolve(false)
+      }
+      // la sessione è già stata inizializzata ma verifico che un rollback non abbia cancellato
+      // il record in ra_session, eventualmente lo reinserisco e ritorno true
+      this._check_session_exists()
+        .then((bool) => {
+          resolve(bool)
+        })
+        .catch((err) => {
+          reject(err)
+        })
+    })
+  }
+
+  set_session_ready() {
+    return this.sessionReady = true
+  }
+
+  init_session() {
+    return new Promise((resolve, reject) => {
+      this.is_session_ready()
+        .then((bool) => {
+          if(bool === true) {
+            return resolve()
+          }
+          let sql = `
+            begin
+              rm_activity.store_session (
+                :SESSION_TOKEN
+              );
+              ${EXCEPTIONS}
+            end;
+          `
+          this.connection.execute(sql, {
+            SESSION_TOKEN: { val: this.targetToken[this.targetService][this.targetContext], dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+            ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
+            DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
+          })
+            .then((res) => {
+              if(res.outBinds.ERRCODE) {
+                return reject(new SirtiError(res.outBinds.ERRCODE + ' - ' + res.outBinds.ERRMSG))
+              }
+              this.set_session_ready()
+              resolve()
+            })
+            .catch((err) => {
+              reject(err)
+            })
+        })
+        .catch((err) => {
+          reject(err)
+        })
+    })
   }
 
   init() {
@@ -51,11 +143,14 @@ export class RemoteActivitySource {
         SOURCE_CONTEXT: { val: this.sourceContext, dir: oracledb.BIND_IN, type:oracledb.STRING },
         USER_ID: { val: null, dir: oracledb.BIND_IN, type:oracledb.NUMBER },
         USER_NAME: { val: null, dir: oracledb.BIND_IN, type:oracledb.STRING },
-        ERRMSG: { dir: oracledb.BIND_OUT, type: oracledb.STRING },
-        ERRCODE: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+        ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
         DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
       })
         .then((res) => {
+          if(res.outBinds.ERRCODE) {
+            return reject(new SirtiError(res.outBinds.ERRCODE + ' - ' + res.outBinds.ERRMSG))
+          }
           this.sessionToken = res.outBinds.SESSION_TOKEN
           let sql = `
             begin
@@ -63,14 +158,20 @@ export class RemoteActivitySource {
                  :CUR
                 ,:SESSION_TOKEN
               );
-              -- EXCEPTIONS
+              ${EXCEPTIONS}
             end;
           `
           this.connection.execute(sql, {
             CUR: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR },
-            SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING }
+            SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+            ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
+            DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
           }, { outFormat: oracledb.OBJECT })
             .then((res) => {
+              if(res.outBinds.ERRCODE) {
+                return reject(new SirtiError(res.outBinds.ERRCODE + ' - ' + res.outBinds.ERRMSG))
+              }
               res.outBinds.CUR.getRow()
                 .then((row) => {
                   this.sessionId = row.ID
@@ -81,7 +182,7 @@ export class RemoteActivitySource {
                         ,:TARGET_SERVICE
                         ,:TARGET_CONTEXT
                       );
-                      -- EXCEPTIONS
+                      ${EXCEPTIONS}
                     end;
                   `
                   this.connection.execute(sql, {
@@ -89,21 +190,34 @@ export class RemoteActivitySource {
                     SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
                     TARGET_SERVICE: { val: this.targetService, dir: oracledb.BIND_IN, typex: oracledb.STRING },
                     TARGET_CONTEXT: { val: this.targetContext, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+                    ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+                    ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
+                    DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
                   })
                     .then((res) => {
+                      if(res.outBinds.ERRCODE) {
+                        return reject(new SirtiError(res.outBinds.ERRCODE + ' - ' + res.outBinds.ERRMSG))
+                      }
                       this.targetToken[this.targetService][this.targetContext] = res.outBinds.SESSION_TARGET_TOKEN
                       let sql = `
                         begin
                           rm_activity.store_session (
                             :SESSION_TOKEN
                           );
-                          -- EXCEPTIONS
+                          ${EXCEPTIONS}
                         end;
                       `
                       this.connection.execute(sql, {
-                        SESSION_TOKEN: { val: this.targetToken[this.targetService][this.targetContext], dir: oracledb.BIND_IN, typex: oracledb.STRING }
+                        SESSION_TOKEN: { val: this.targetToken[this.targetService][this.targetContext], dir: oracledb.BIND_IN, typex: oracledb.STRING },
+                        ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+                        ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
+                        DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
                       })
-                        .then(() => {
+                        .then((res) => {
+                          if(res.outBinds.ERRCODE) {
+                            return reject(new SirtiError(res.outBinds.ERRCODE + ' - ' + res.outBinds.ERRMSG))
+                          }
+                          this.set_session_ready()
                           resolve()
                         })
                         .catch((err) => {
@@ -130,33 +244,45 @@ export class RemoteActivitySource {
 
   insert(eventName, sourceRef, data = {}, needAck = false, scheduleDate = null, expiryDate = null) {
     return new Promise((resolve, reject) => {
-      let sql = `
-        begin
-          :RES_ID := rm_activity.event_insert(
-             :SESSION_TOKEN
-            ,:SOURCE_REF
-            ,:EVENT
-            ,sysdate
-            ,:SCHEDULE_DATE
-            ,:EXPIRY_DATE
-            ,:NEED_ACK
-          );
-          -- EXCEPTIONS
-        end;
-      `
-      this.connection.execute(sql, {
-        RES_ID: { dir: oracledb.BIND_OUT, typex: oracledb.NUMBER },
-        SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
-        SOURCE_REF: { val: sourceRef, dir: oracledb.BIND_IN, typex: oracledb.STRING },
-        EVENT: { val: eventName, dir: oracledb.BIND_IN, typex: oracledb.STRING },
-        SCHEDULE_DATE: { val: scheduleDate, dir: oracledb.BIND_IN, typex: oracledb.DATE },
-        EXPIRY_DATE: { val: expiryDate, dir: oracledb.BIND_IN, typex: oracledb.DATE },
-        NEED_ACK: { val: (needAck ? "1" : null), dir: oracledb.BIND_IN, typex: oracledb.STRING }
-      })
-        .then((res) => {
-          let raId = res.outBinds.RES_ID
-          // FIXME: inserire ra_data
-          resolve(raId)
+      this.init_session()
+        .then(() => {
+          let sql = `
+            begin
+              :RES_ID := rm_activity.event_insert(
+                 :SESSION_TOKEN
+                ,:SOURCE_REF
+                ,:EVENT
+                ,sysdate
+                ,:SCHEDULE_DATE
+                ,:EXPIRY_DATE
+                ,:NEED_ACK
+              );
+              ${EXCEPTIONS}
+            end;
+          `
+          this.connection.execute(sql, {
+            RES_ID: { dir: oracledb.BIND_OUT, typex: oracledb.NUMBER },
+            SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            SOURCE_REF: { val: sourceRef, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            EVENT: { val: eventName, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            SCHEDULE_DATE: { val: scheduleDate, dir: oracledb.BIND_IN, typex: oracledb.DATE },
+            EXPIRY_DATE: { val: expiryDate, dir: oracledb.BIND_IN, typex: oracledb.DATE },
+            NEED_ACK: { val: (needAck ? "1" : null), dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+            ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
+            DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
+          })
+            .then((res) => {
+              if(res.outBinds.ERRCODE) {
+                return reject(new SirtiError(res.outBinds.ERRCODE + ' - ' + res.outBinds.ERRMSG))
+              }
+              let raId = res.outBinds.RES_ID
+              // FIXME: inserire ra_data
+              resolve(raId)
+            })
+            .catch((err) => {
+              reject(err)
+            })
         })
         .catch((err) => {
           reject(err)

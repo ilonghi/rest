@@ -90,18 +90,22 @@ class Users {
           })
           raSource.init()
             .then(() => {
+              let ids = []
               raSource.insert('NEW', 'PIPPO')
                 .then((id) => {
-                  connection.commit()
+                  ids.push(id)
+                  connection.rollback()
                     .then(() => {
-                      console.log("Ho committato")
+                      console.log("Ho rollbackato")
+                      ids.pop();
                       raSource.insert('NEW', 'PIPPO', { pippo: "prova", pluto: "provino", numero: 1 })
                         .then((id) => {
+                          ids.push(id)
                           connection.commit()
                             .then(() => {
                               console.log("Ho committato")
                               doRelease(connection)
-                              resolve({ ok: true, id })
+                              resolve({ ok: true, ids })
                             })
                             .catch((err) => {
                               doRelease(connection)
