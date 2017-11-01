@@ -22,22 +22,22 @@ export class RemoteActivitySource {
   }
 
   init() {
-    let sql = `
-      begin
-        :SESSION_TOKEN := rm_activity.create_session (
-           :SESSION_TYPE
-          ,:RA_DBLINK
-          ,:SESSION_DESCRIPTION
-          ,:SESSION_CMDLINE
-          ,:SOURCE_SERVICE
-          ,:SOURCE_CONTEXT
-          ,:USER_ID
-          ,:USER_NAME
-        );
-        -- EXCEPTIONS
-      end;
-    `
     return new Promise((resolve, reject) => {
+      let sql = `
+        begin
+          :SESSION_TOKEN := rm_activity.create_session (
+             :SESSION_TYPE
+            ,:RA_DBLINK
+            ,:SESSION_DESCRIPTION
+            ,:SESSION_CMDLINE
+            ,:SOURCE_SERVICE
+            ,:SOURCE_CONTEXT
+            ,:USER_ID
+            ,:USER_NAME
+          );
+          -- EXCEPTIONS
+        end;
+      `
       this.connection.execute(sql, {
         SESSION_TOKEN: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
         SESSION_TYPE: { val: this.sessionType, dir: oracledb.BIND_IN, type:oracledb.STRING },
@@ -122,18 +122,41 @@ export class RemoteActivitySource {
     })
   }
 
-  insert() {
-    let query = 'SELECT 1 from dual'
-    var bind = []
-    this.connection.execute(query, bind)
-      .then((result) => {
-        resolve(result.rows[0][0])
+  insert(eventName, sourceRef, data = {}, needAck = false, scheduleDate = null, expiryDate = null) {
+    return new Promise((resolve, reject) => {
+      let sql = `
+        begin
+          :RES_ID := rm_activity.event_insert(
+             :SESSION_TOKEN
+            ,:SOURCE_REF
+            ,:EVENT
+            ,sysdate
+            ,:SCHEDULE_DATE
+            ,:EXPIRY_DATE
+            ,:NEED_ACK
+          );
+          -- EXCEPTIONS
+        end;
+      `
+      this.connection.execute(sql, {
+        RES_ID: { dir: oracledb.BIND_OUT, typex: oracledb.NUMBER },
+        SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+        SOURCE_REF: { val: sourceRef, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+        EVENT: { val: eventName, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+        SCHEDULE_DATE: { val: scheduleDate, dir: oracledb.BIND_IN, typex: oracledb.DATE },
+        EXPIRY_DATE: { val: expiryDate, dir: oracledb.BIND_IN, typex: oracledb.DATE },
+        NEED_ACK: { val: (needAck ? "1" : null), dir: oracledb.BIND_IN, typex: oracledb.STRING }
       })
-      .catch((err) => {
-        reject(err)
-      })
+        .then((res) => {
+          let raId = res.outBinds.RES_ID
+          // FIXME: inserire ra_data
+          resolve(raId)
+        })
+        .catch((err) => {
+          reject(err)
+        })
+    })
   }
-
 }
 
 export default { RemoteActivitySource }
