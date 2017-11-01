@@ -89,12 +89,12 @@ class Users {
             targetContext: "SINFO_PROJECTS"
           })
           raSource.init()
-            .then((res) => {
+            .then(() => {
               connection.commit()
                 .then(() => {
                   console.log("Ho committato")
                   doRelease(connection)
-                  resolve(res)
+                  resolve({ ok: true })
                 })
                 .catch((err) => {
                   doRelease(connection)
