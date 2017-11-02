@@ -1,5 +1,6 @@
 import oracledb from 'oracledb'
 import Promise from 'bluebird'
+import _ from 'underscore'
 
 import { EXCEPTIONS } from './constants'
 import { SirtiError } from '../sirti-error'
@@ -261,7 +262,7 @@ export class RemoteActivitySource {
             end;
           `
           this.connection.execute(sql, {
-            RES_ID: { dir: oracledb.BIND_OUT, typex: oracledb.NUMBER },
+            RES_ID: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
             SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
             SOURCE_REF: { val: sourceRef, dir: oracledb.BIND_IN, typex: oracledb.STRING },
             EVENT: { val: eventName, dir: oracledb.BIND_IN, typex: oracledb.STRING },
@@ -277,8 +278,13 @@ export class RemoteActivitySource {
                 return reject(new SirtiError(res.outBinds.ERRCODE + ' - ' + res.outBinds.ERRMSG))
               }
               let raId = res.outBinds.RES_ID
-              // FIXME: inserire ra_data
-              resolve(raId)
+              this._insertRaData(raId, data)
+                .then(() => {
+                  resolve(raId)
+                })
+                .catch((err) => {
+                  reject(err)
+                })
             })
             .catch((err) => {
               reject(err)
@@ -289,6 +295,83 @@ export class RemoteActivitySource {
         })
     })
   }
+
+  _insertRaData(raId, data) {
+    return new Promise((resolve, reject) => {
+      console.log(data)
+      if(_.isEmpty(data)) {
+        return resolve()
+      }
+      let promises = []
+      _.each(data, (value, name, list) => {
+        if(_.isArray(value)) {
+          // TODO
+        } else {
+          if(_.isNull(value) || _.isUndefined(value)) {
+            value = ""
+          }
+          if(value.length > 4000) {
+            // TODO
+          } else {
+            promises.push(this._insertChunk(raId, name, value))
+          }
+        }
+      })
+      Promise.all(promises)
+        .then((results) => {
+          _.each(results, (val) => {
+            console.log(val)
+          })
+          // FIXME: fare meglio per raccogliere errori
+          let ok = _.every(results, (res) => {
+            return res.ok === true;
+          })
+          if(!ok) {
+            return reject(new SirtiError("Unable to insert ra data"))
+          }
+          resolve()
+        })
+    })
+  }
+
+  _insertChunk(raId, name, value, chunkId = null) {
+    console.log(typeof raId)
+    return new Promise((resolve, reject) => {
+      let sql = `
+        begin
+          :RES_ID := rm_activity.event_data_insert(
+             :SESSION_TOKEN
+            ,:EVENT_ID
+            ,:NAME
+            ,:VALUE
+            ,:CHUNK_ID
+          );
+          ${EXCEPTIONS}
+        end;
+      `
+      this.connection.execute(sql, {
+        RES_ID: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
+        SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, type: oracledb.STRING },
+        EVENT_ID: { val: raId, dir: oracledb.BIND_IN, type: oracledb.NUMBER },
+        NAME: { val: name, dir: oracledb.BIND_IN, type: oracledb.STRING },
+        VALUE: { val: value, dir: oracledb.BIND_IN, typex: oracledb.STRING }, // FIXME: e se arriva un numero?
+        CHUNK_ID: { val: chunkId, dir: oracledb.BIND_IN, type: oracledb.NUMBER },
+        ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
+        ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
+        DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
+      })
+        .then((res) => {
+          if(res.outBinds.ERRCODE) {
+            return resolve({ ok: false, err: new SirtiError(res.outBinds.ERRCODE + ' - ' + res.outBinds.ERRMSG) })
+          }
+          resolve({ ok: true, raDataId: res.outBinds.RES_ID })
+        })
+        .catch((err) => {
+          return resolve({ ok: false, err })
+        })
+    })
+  }
+
 }
 
 export default { RemoteActivitySource }
