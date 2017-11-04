@@ -98,7 +98,7 @@ class Users {
                     .then(() => {
                       console.log("Ho rollbackato")
                       ids.pop();
-                      raSource.insert('NEW', 'PIPPO', { pippo: "prova", pluto: "provino", numero: 1, nulla: null, indefinito: undefined })
+                      raSource.insert('NEW', 'PIPPO', { pippo: "prova", pluto: "provino", numero: 1, nulla: null, indefinito: undefined, pre: [], array: [ 'tizio', 'caio', 'sempronio' ] })
                         .then((id) => {
                           ids.push(id)
                           connection.commit()

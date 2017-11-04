@@ -305,7 +305,9 @@ export class RemoteActivitySource {
       let promises = []
       _.each(data, (value, name, list) => {
         if(_.isArray(value)) {
+          console.log("sono qui")
           // TODO
+          promises.push(this._insertRaDataArray(raId, name, value))
         } else {
           if(_.isNull(value) || _.isUndefined(value)) {
             value = ""
@@ -319,6 +321,7 @@ export class RemoteActivitySource {
       })
       Promise.all(promises)
         .then((results) => {
+          console.log("that's all")
           _.each(results, (val) => {
             console.log(val)
           })
@@ -335,7 +338,6 @@ export class RemoteActivitySource {
   }
 
   _insertChunk(raId, name, value, chunkId = null) {
-    console.log(typeof raId)
     return new Promise((resolve, reject) => {
       let sql = `
         begin
@@ -368,6 +370,33 @@ export class RemoteActivitySource {
         })
         .catch((err) => {
           return resolve({ ok: false, err })
+        })
+    })
+  }
+
+  _insertRaDataArray(raId, name, values) {
+    return new Promise((resolve, reject) => {
+      console.log("creo promessa")
+      if(!values.length) {
+        console.log("risolvo promessa")
+        console.log("finisco")
+        return resolve({ ok: true, raDataId: 1000 })
+      }
+      let value = values.shift()
+      console.log("value: ", value)
+      return this._insertChunk(raId, name, value)
+        .then((res) => {
+          if(res.ok === false) {
+            console.log("Non ho inserito " + value)
+            return resolve({ ok: false, err: res.err })
+          }
+          console.log("Ho inserito " + value)
+          console.log("values: ", values)
+          return this._insertRaDataArray(raId, name, values)
+            .then((res) => {
+              console.log("risolvo promessa")
+              return resolve({ ok: true, raDataId: 1000 })
+            })
         })
     })
   }
