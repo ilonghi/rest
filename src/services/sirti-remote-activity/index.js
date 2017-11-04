@@ -304,33 +304,35 @@ export class RemoteActivitySource {
       }
       let promises = []
       _.each(data, (value, name, list) => {
+        if(_.isNull(value) || _.isUndefined(value)) {
+          value = ""
+        }
+        if(_.isNumber(value)) {
+          value = value.toString()
+        }
         if(_.isArray(value)) {
-          console.log("sono qui")
-          // TODO
           promises.push(this._insertRaDataArray(raId, name, value))
+        } else if(_.isString(value)) {
+          promises.push(this._insertChunk(raId, name, value))
         } else {
-          if(_.isNull(value) || _.isUndefined(value)) {
-            value = ""
-          }
-          if(value.length > 4000) {
-            // TODO
-          } else {
-            promises.push(this._insertChunk(raId, name, value))
-          }
+          reject(new SirtiError("You can insert only strings, numbers or array as ra data"))
         }
       })
       Promise.all(promises)
-        .then((results) => {
+        .then((res) => {
           console.log("that's all")
-          _.each(results, (val) => {
+          _.each(res, (val) => {
             console.log(val)
           })
-          // FIXME: fare meglio per raccogliere errori
-          let ok = _.every(results, (res) => {
-            return res.ok === true;
+          // restituisco il primo errore che trovo
+          let err = _.find(res, (r) => {
+            // _.find restituisce il primo elemento true, quindi in err ci sarà
+            // un errore o undfined se nessuna promise ha restituito errore
+            return !r.ok;
           })
-          if(!ok) {
-            return reject(new SirtiError("Unable to insert ra data"))
+          if(err) {
+            console.log(err.err)
+            return reject(err.err)
           }
           resolve()
         })
@@ -338,6 +340,7 @@ export class RemoteActivitySource {
   }
 
   _insertChunk(raId, name, value, chunkId = null) {
+    // FIXME: implementare chunks se value.length > 4000
     return new Promise((resolve, reject) => {
       let sql = `
         begin
@@ -356,7 +359,7 @@ export class RemoteActivitySource {
         SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, type: oracledb.STRING },
         EVENT_ID: { val: raId, dir: oracledb.BIND_IN, type: oracledb.NUMBER },
         NAME: { val: name, dir: oracledb.BIND_IN, type: oracledb.STRING },
-        VALUE: { val: value, dir: oracledb.BIND_IN, typex: oracledb.STRING }, // FIXME: e se arriva un numero?
+        VALUE: { val: value, dir: oracledb.BIND_IN, type: oracledb.STRING },
         CHUNK_ID: { val: chunkId, dir: oracledb.BIND_IN, type: oracledb.NUMBER },
         ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
         ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
@@ -374,33 +377,30 @@ export class RemoteActivitySource {
     })
   }
 
-  _insertRaDataArray(raId, name, values) {
+  _insertRaDataArray(raId, name, values, raDataIds = []) {
     return new Promise((resolve, reject) => {
-      console.log("creo promessa")
       if(!values.length) {
-        console.log("risolvo promessa")
-        console.log("finisco")
-        return resolve({ ok: true, raDataId: 1000 })
+        resolve({ ok: false, err: new SirtiError("Cannot insert empty array as ra data")})
       }
       let value = values.shift()
-      console.log("value: ", value)
       return this._insertChunk(raId, name, value)
         .then((res) => {
-          if(res.ok === false) {
-            console.log("Non ho inserito " + value)
-            return resolve({ ok: false, err: res.err })
+          if(!res.ok) {
+            return resolve({ ok: res.ok, err: res.err })
           }
-          console.log("Ho inserito " + value)
-          console.log("values: ", values)
-          return this._insertRaDataArray(raId, name, values)
-            .then((res) => {
-              console.log("risolvo promessa")
-              return resolve({ ok: true, raDataId: 1000 })
-            })
+          raDataIds.push(res.raDataId)
+          if(values.length) {
+            // ho ancora elementi da inserire quindi chiamo ricorsivamente la funzione
+            return this._insertRaDataArray(raId, name, values, raDataIds)
+              .then((res) => {
+                return resolve({ ok: true, raDataId: raDataIds })
+              })
+          }
+          // iterazione finale
+          return resolve({ ok: true, raDataId: raDataIds })
         })
     })
   }
-
 }
 
 export default { RemoteActivitySource }
