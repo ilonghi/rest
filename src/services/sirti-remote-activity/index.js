@@ -340,6 +340,7 @@ export class RemoteActivitySource {
         resolve({ ok: false, err: new SirtiError("Cannot insert empty array as ra data")})
       }
       let value = values.shift()
+      // inserisco l'elemento dell'array
       return this._insertChunk(raId, name, value)
         .then((res) => {
           if(!res.ok) {
@@ -375,6 +376,7 @@ export class RemoteActivitySource {
       if(_.isNumber(value)) {
         value = value.toString()
       }
+      // inserisco l'elemento
       let promise;
       if(_.isArray(value)) {
         promise = this._insertRaDataArray(raId, name, value)
@@ -390,6 +392,8 @@ export class RemoteActivitySource {
             return reject(res.err)
           }
           if(!_.isEmpty(data)) {
+            // ho ancora elementi da inserire, quindi chiamo ricorsivamente
+            // la funzione
             return this._insertRaData(raId, data)
               .then((res) => {
                 resolve()
@@ -398,40 +402,9 @@ export class RemoteActivitySource {
                 reject(err)
               })
           }
-          resolve()
+          // iterazione finale
+          return resolve()
         })
-  /*
-
-      let promises = []
-      _.each(data, (value, name, list) => {
-        if(_.isNull(value) || _.isUndefined(value)) {
-          value = ""
-        }
-        if(_.isNumber(value)) {
-          value = value.toString()
-        }
-        if(_.isArray(value)) {
-          promises.push(this._insertRaDataArray(raId, name, value))
-        } else if(_.isString(value)) {
-          promises.push(this._insertChunk(raId, name, value))
-        } else {
-          reject(new SirtiError("You can insert only strings, numbers or array as ra data"))
-        }
-      })
-      Promise.all(promises)
-        .then((res) => {
-          console.log("that's all")
-          _.each(res, (val) => {
-            console.log(val)
-          })
-          // restituisco il primo errore che trovo
-          let err = _.find(res, (r) => {
-            // _.find restituisce il primo elemento true, quindi in err ci sarà
-            // un errore o undfined se nessuna promise ha restituito errore
-            return !r.ok;
-          })
-        })
-        */
     })
   }
 
