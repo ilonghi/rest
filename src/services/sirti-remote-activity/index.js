@@ -97,7 +97,7 @@ export class RemoteActivitySource {
             end;
           `
           this.connection.execute(sql, {
-            SESSION_TOKEN: { val: this.targetToken[this.targetService][this.targetContext], dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            SESSION_TOKEN: { val: this.targetToken[this.targetService][this.targetContext], dir: oracledb.BIND_IN, type: oracledb.STRING },
             ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
             ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
             DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
@@ -166,7 +166,7 @@ export class RemoteActivitySource {
           `
           this.connection.execute(sql, {
             CUR: { dir: oracledb.BIND_OUT, type: oracledb.CURSOR },
-            SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, type: oracledb.STRING },
             ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
             ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
             DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
@@ -190,9 +190,9 @@ export class RemoteActivitySource {
                   `
                   this.connection.execute(sql, {
                     SESSION_TARGET_TOKEN: { dir: oracledb.BIND_OUT, type: oracledb.STRING },
-                    SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
-                    TARGET_SERVICE: { val: this.targetService, dir: oracledb.BIND_IN, typex: oracledb.STRING },
-                    TARGET_CONTEXT: { val: this.targetContext, dir: oracledb.BIND_IN, typex: oracledb.STRING },
+                    SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, type: oracledb.STRING },
+                    TARGET_SERVICE: { val: this.targetService, dir: oracledb.BIND_IN, type: oracledb.STRING },
+                    TARGET_CONTEXT: { val: this.targetContext, dir: oracledb.BIND_IN, type: oracledb.STRING },
                     ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
                     ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
                     DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
@@ -211,7 +211,7 @@ export class RemoteActivitySource {
                         end;
                       `
                       this.connection.execute(sql, {
-                        SESSION_TOKEN: { val: this.targetToken[this.targetService][this.targetContext], dir: oracledb.BIND_IN, typex: oracledb.STRING },
+                        SESSION_TOKEN: { val: this.targetToken[this.targetService][this.targetContext], dir: oracledb.BIND_IN, type: oracledb.STRING },
                         ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
                         ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
                         DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
@@ -265,12 +265,12 @@ export class RemoteActivitySource {
           `
           this.connection.execute(sql, {
             RES_ID: { dir: oracledb.BIND_OUT, type: oracledb.NUMBER },
-            SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, typex: oracledb.STRING },
-            SOURCE_REF: { val: sourceRef, dir: oracledb.BIND_IN, typex: oracledb.STRING },
-            EVENT: { val: eventName, dir: oracledb.BIND_IN, typex: oracledb.STRING },
-            SCHEDULE_DATE: { val: scheduleDate, dir: oracledb.BIND_IN, typex: oracledb.DATE },
-            EXPIRY_DATE: { val: expiryDate, dir: oracledb.BIND_IN, typex: oracledb.DATE },
-            NEED_ACK: { val: (needAck ? "1" : null), dir: oracledb.BIND_IN, typex: oracledb.STRING },
+            SESSION_TOKEN: { val: this.sessionToken, dir: oracledb.BIND_IN, type: oracledb.STRING },
+            SOURCE_REF: { val: sourceRef, dir: oracledb.BIND_IN, type: oracledb.STRING },
+            EVENT: { val: eventName, dir: oracledb.BIND_IN, type: oracledb.STRING },
+            SCHEDULE_DATE: { val: scheduleDate, dir: oracledb.BIND_IN, type: oracledb.DATE },
+            EXPIRY_DATE: { val: expiryDate, dir: oracledb.BIND_IN, type: oracledb.DATE },
+            NEED_ACK: { val: (needAck ? "1" : null), dir: oracledb.BIND_IN, type: oracledb.STRING },
             ERRMSG: { dir: oracledb.BIND_INOUT, type: oracledb.STRING },
             ERRCODE: { dir: oracledb.BIND_INOUT, type: oracledb.NUMBER },
             DBLINK: { val: this.dbLink, dir: oracledb.BIND_IN, type: oracledb.STRING }
