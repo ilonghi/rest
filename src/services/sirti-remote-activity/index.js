@@ -338,6 +338,15 @@ export class RemoteActivitySource {
 
   _insertRaDataString(raId, name, value, chunkId = null, raDataIds = []) {
     return new Promise((resolve, reject) => {
+      if(_.isNull(value) || _.isUndefined(value)) {
+        value = ""
+      }
+      if(_.isNumber(value)) {
+        value = value.toString()
+      }
+      if(!_.isString(value)) {
+        return resolve({ ok: false, err: new SirtiError("You can insert only strings, numbers or array of strings and numbers as ra data") })
+      }
       if(_.isNull(chunkId)) {
         chunkId = value.length > this.raDataChunkLength ? 0 : null
       } else {
@@ -348,7 +357,7 @@ export class RemoteActivitySource {
       // console.log("value: ", value)
       let chunk = value.substr(0, this.raDataChunkLength)
       value = value.substr(this.raDataChunkLength)
-      // inserisco l'elemento dell'array
+      // inserisco il chunk
       return this._insertRaDataChunk(raId, name, chunk, chunkId)
         .then((res) => {
           if(!res.ok) {
@@ -404,21 +413,13 @@ export class RemoteActivitySource {
       let name = _.keys(data)[0]
       let value = data[name]
       delete data[name]
-      if(_.isNull(value) || _.isUndefined(value)) {
-        value = ""
-      }
-      if(_.isNumber(value)) {
-        value = value.toString()
-      }
       // inserisco l'elemento
-      let promise;
+      let promise
       if(_.isArray(value)) {
         promise = this._insertRaDataArray(raId, name, value)
-      } else if(_.isString(value)) {
+      } else {
         // console.log("chiamo con ", value)
         promise = this._insertRaDataString(raId, name, value)
-      } else {
-        reject(new SirtiError("You can insert only strings, numbers or array as ra data"))
       }
       return promise
         .then((res) => {
