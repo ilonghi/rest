@@ -296,49 +296,6 @@ export class RemoteActivitySource {
     })
   }
 
-  _insertRaData(raId, data) {
-    return new Promise((resolve, reject) => {
-      console.log(data)
-      if(_.isEmpty(data)) {
-        return resolve()
-      }
-      let promises = []
-      _.each(data, (value, name, list) => {
-        if(_.isNull(value) || _.isUndefined(value)) {
-          value = ""
-        }
-        if(_.isNumber(value)) {
-          value = value.toString()
-        }
-        if(_.isArray(value)) {
-          promises.push(this._insertRaDataArray(raId, name, value))
-        } else if(_.isString(value)) {
-          promises.push(this._insertChunk(raId, name, value))
-        } else {
-          reject(new SirtiError("You can insert only strings, numbers or array as ra data"))
-        }
-      })
-      Promise.all(promises)
-        .then((res) => {
-          console.log("that's all")
-          _.each(res, (val) => {
-            console.log(val)
-          })
-          // restituisco il primo errore che trovo
-          let err = _.find(res, (r) => {
-            // _.find restituisce il primo elemento true, quindi in err ci sarà
-            // un errore o undfined se nessuna promise ha restituito errore
-            return !r.ok;
-          })
-          if(err) {
-            console.log(err.err)
-            return reject(err.err)
-          }
-          resolve()
-        })
-    })
-  }
-
   _insertChunk(raId, name, value, chunkId = null) {
     // FIXME: implementare chunks se value.length > 4000
     return new Promise((resolve, reject) => {
@@ -401,6 +358,83 @@ export class RemoteActivitySource {
         })
     })
   }
+
+  _insertRaData(raId, data) {
+    return new Promise((resolve, reject) => {
+      console.log(data)
+      if(_.isEmpty(data)) {
+        console.log("_insertRaData finish")
+        return resolve()
+      }
+      let name = _.keys(data)[0]
+      let value = data[name]
+      delete data[name]
+      if(_.isNull(value) || _.isUndefined(value)) {
+        value = ""
+      }
+      if(_.isNumber(value)) {
+        value = value.toString()
+      }
+      let promise;
+      if(_.isArray(value)) {
+        promise = this._insertRaDataArray(raId, name, value)
+      } else if(_.isString(value)) {
+        promise = this._insertChunk(raId, name, value)
+      } else {
+        reject(new SirtiError("You can insert only strings, numbers or array as ra data"))
+      }
+      return promise
+        .then((res) => {
+          if(!res.ok) {
+            console.log(res.err)
+            return reject(res.err)
+          }
+          if(!_.isEmpty(data)) {
+            return this._insertRaData(raId, data)
+              .then((res) => {
+                resolve()
+              })
+              .catch((err) => {
+                reject(err)
+              })
+          }
+          resolve()
+        })
+  /*
+
+      let promises = []
+      _.each(data, (value, name, list) => {
+        if(_.isNull(value) || _.isUndefined(value)) {
+          value = ""
+        }
+        if(_.isNumber(value)) {
+          value = value.toString()
+        }
+        if(_.isArray(value)) {
+          promises.push(this._insertRaDataArray(raId, name, value))
+        } else if(_.isString(value)) {
+          promises.push(this._insertChunk(raId, name, value))
+        } else {
+          reject(new SirtiError("You can insert only strings, numbers or array as ra data"))
+        }
+      })
+      Promise.all(promises)
+        .then((res) => {
+          console.log("that's all")
+          _.each(res, (val) => {
+            console.log(val)
+          })
+          // restituisco il primo errore che trovo
+          let err = _.find(res, (r) => {
+            // _.find restituisce il primo elemento true, quindi in err ci sarà
+            // un errore o undfined se nessuna promise ha restituito errore
+            return !r.ok;
+          })
+        })
+        */
+    })
+  }
+
 }
 
 export default { RemoteActivitySource }
