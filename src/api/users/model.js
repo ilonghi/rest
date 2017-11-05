@@ -91,10 +91,14 @@ class Users {
           raSource.init()
             .then(() => {
               let ids = []
+              let lunga = ""
+              for(let i = 0; i < 398; i++) {
+                lunga += "0123456789"
+              }
               raSource.insert('NEW', 'PIPPO')
                 .then((id) => {
                   ids.push(id)
-                  connection.rollback()
+                  connection.commit()
                     .then(() => {
                       console.log("Ho rollbackato")
                       ids.pop();
