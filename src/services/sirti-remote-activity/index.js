@@ -24,6 +24,8 @@ export class RemoteActivitySource {
     this.dbLink = ''
 
     this.sessionReady = false // Indica che l'insert nella RA_SESSION non è ancora avvenuto
+
+    this.raDataChunkLength = 4000
   }
 
   _check_session_exists() {
@@ -296,8 +298,8 @@ export class RemoteActivitySource {
     })
   }
 
-  _insertChunk(raId, name, value, chunkId = null) {
-    // FIXME: implementare chunks se value.length > 4000
+  _insertRaDataChunk(raId, name, value, chunkId = null) {
+    // console.log("chunkId,name,value: %s,%s,%s", name, value, chunkId)
     return new Promise((resolve, reject) => {
       let sql = `
         begin
@@ -334,6 +336,38 @@ export class RemoteActivitySource {
     })
   }
 
+  _insertRaDataString(raId, name, value, chunkId = null, raDataIds = []) {
+    return new Promise((resolve, reject) => {
+      if(_.isNull(chunkId)) {
+        chunkId = value.length > this.raDataChunkLength ? 0 : null
+      } else {
+        chunkId++
+      }
+      // console.log("arguments: ", arguments)
+      // console.log("chunkId: ", chunkId)
+      // console.log("value: ", value)
+      let chunk = value.substr(0, this.raDataChunkLength)
+      value = value.substr(this.raDataChunkLength)
+      // inserisco l'elemento dell'array
+      return this._insertRaDataChunk(raId, name, chunk, chunkId)
+        .then((res) => {
+          if(!res.ok) {
+            return resolve({ ok: res.ok, err: res.err })
+          }
+          raDataIds.push(res.raDataId)
+          if(value.length) {
+            // ho ancora elementi da inserire quindi chiamo ricorsivamente la funzione
+            return this._insertRaDataString(raId, name, value, chunkId, raDataIds)
+              .then((res) => {
+                return resolve({ ok: true, raDataId: raDataIds })
+              })
+          }
+          // iterazione finale
+          return resolve({ ok: true, raDataId: raDataIds })
+        })
+    })
+  }
+
   _insertRaDataArray(raId, name, values, raDataIds = []) {
     return new Promise((resolve, reject) => {
       if(!values.length) {
@@ -341,7 +375,7 @@ export class RemoteActivitySource {
       }
       let value = values.shift()
       // inserisco l'elemento dell'array
-      return this._insertChunk(raId, name, value)
+      return this._insertRaDataString(raId, name, value)
         .then((res) => {
           if(!res.ok) {
             return resolve({ ok: res.ok, err: res.err })
@@ -362,9 +396,9 @@ export class RemoteActivitySource {
 
   _insertRaData(raId, data) {
     return new Promise((resolve, reject) => {
-      console.log(data)
+      // console.log(data)
       if(_.isEmpty(data)) {
-        console.log("_insertRaData finish")
+        // console.log("_insertRaData finish")
         return resolve()
       }
       let name = _.keys(data)[0]
@@ -381,14 +415,15 @@ export class RemoteActivitySource {
       if(_.isArray(value)) {
         promise = this._insertRaDataArray(raId, name, value)
       } else if(_.isString(value)) {
-        promise = this._insertChunk(raId, name, value)
+        // console.log("chiamo con ", value)
+        promise = this._insertRaDataString(raId, name, value)
       } else {
         reject(new SirtiError("You can insert only strings, numbers or array as ra data"))
       }
       return promise
         .then((res) => {
           if(!res.ok) {
-            console.log(res.err)
+            // console.log(res.err)
             return reject(res.err)
           }
           if(!_.isEmpty(data)) {
