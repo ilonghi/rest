@@ -28,14 +28,14 @@ class Users {
   static find(username) {
     return new Promise((resolve, reject) => {
       if(username === 'ILONGHIX') {
-        reject(new SirtiError('ILONGHIX error', 'nun se vede', 400))
+        reject(new SirtiError({ message: 'ILONGHIX error', intenalMessage: 'nun se vede', status: 400 }))
       }
       if(username === 'ILONGHIZ') {
         reject(new Error('ILONGHIZ error'))
       }
       oracledb.getPool().getConnection()
         .then((connection) => {
-          var query = 'SELECT login_operatore "username", cognome_operatore "surname", nome_operatore "firstname" from operatori where 1=1'
+          var query = 'SELECT xlogin_operatore "username", cognome_operatore "surname", nome_operatore "firstname" from operatori where 1=1'
           var bind = []
           if(username) {
             query += ' and login_operatore = :username'
@@ -53,7 +53,7 @@ class Users {
               resolve(users)
             })
             .catch((err) => {
-              console.error(err)
+              //console.error(err)
               doRelease(connection)
               reject(err)
             })
